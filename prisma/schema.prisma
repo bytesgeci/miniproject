@@ -5,255 +5,239 @@
 // Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
 
 generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "postgresql" // change to mysql/sqlite if needed
+  url      = env("DATABASE_URL")
 }
+
 model User {
-  id               String      @id @default(cuid())
-  name             String
-  email            String       @unique
-  emailVerified    Boolean      @default(false)
-  phone           String?      @unique
-  department      String?
-  image            String?
-  createdAt        DateTime     @default(now())
-  updatedAt        DateTime     @updatedAt
-  sessions         Session[]
-  accounts         Account[]
-  twoFactorEnabled Boolean      @default(false)
-  twoFactor        TwoFactor[]
-  role             String?
-  banned           Boolean?
-  banReason        String?
-  banExpires       DateTime?
+  user_id      Int       @id @default(autoincrement())
+  name         String
+  email        String    @unique
+  phone        String?
+  designation  String?
+  department   String?
+  firebase_uid String?
+  created_at   DateTime  @default(now())
 
-  @@map("user")
+  roles        UserRole[]
+  notifications Notification[]
+  auditLogs    AuditLog[]
 }
 
-model Session {
-  id             String   @id @default(cuid())
-  expiresAt      DateTime
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  ipAddress      String?
-  userAgent      String?
-  userId         String
-  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  impersonatedBy String?
+model Role {
+  role_id Int    @id @default(autoincrement())
+  role    String
 
-  @@map("session")
+  users   UserRole[]
 }
 
-model Account {
-  id                    String    @id @default(cuid())
+model UserRole {
+  userrole_id Int  @id @default(autoincrement())
+  user_id     Int
+  role_id     Int
 
-  // IMPORTANT: Better Auth required names
-  provider              String
-  providerAccountId     String
-  userId                String
+  user User @relation(fields: [user_id], references: [user_id])
+  role Role @relation(fields: [role_id], references: [role_id])
+}
 
-  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+model AcademicYear {
+  year_id       Int    @id @default(autoincrement())
+  academic_year String
 
-  accessToken           String?
-  refreshToken          String?
-  idToken               String?
-  accessTokenExpiresAt  DateTime?
-  refreshTokenExpiresAt DateTime?
-  scope                 String?
-  password              String?
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
+  semesters   Semester[]
+  courseFiles CourseFile[]
+}
 
-  @@unique([provider, providerAccountId])
-  @@map("account")
+model Semester {
+  sem_id   Int @id @default(autoincrement())
+  sem_no   Int
+  year_id  Int
+
+  year     AcademicYear @relation(fields: [year_id], references: [year_id])
+  courses  Course[]
+  courseFiles CourseFile[]
+}
+
+model Course {
+  course_id   Int    @id @default(autoincrement())
+  code        String
+  c_name      String
+  sem_id      Int
+  regulations String?
+
+  semester Semester @relation(fields: [sem_id], references: [sem_id])
+  assigns  CourseAssign[]
+  courseFiles CourseFile[]
+}
+
+model CourseAssign {
+  assign_id  Int    @id @default(autoincrement())
+  course_id  Int
+  faculty_id Int
+  role       String
+
+  course Course @relation(fields: [course_id], references: [course_id])
+  faculty Faculty @relation(fields: [faculty_id], references: [faculty_id])
+}
+
+model Faculty {
+  faculty_id   Int    @id @default(autoincrement())
+  courses      String?
+  events       String?
+  last_updated DateTime?
+
+  assignments CourseAssign[]
+}
+
+model CourseFile {
+  course_file_id Int @id @default(autoincrement())
+  course_id      Int
+  sem_id         Int
+  year_id        Int
+  created_by    Int
+  status         String
+  created_at     DateTime @default(now())
+
+  course    Course       @relation(fields: [course_id], references: [course_id])
+  semester  Semester     @relation(fields: [sem_id], references: [sem_id])
+  year      AcademicYear @relation(fields: [year_id], references: [year_id])
+  documents CourseFileDocument[]
+}
+
+model Checklist {
+  checklist_id   Int    @id @default(autoincrement())
+  check_name     String
+  applicable_to  String
+
+  items ChecklistItem[]
+  documents CourseFileDocument[]
+}
+
+model ChecklistItem {
+  item_id      Int @id @default(autoincrement())
+  checklist_id Int
+  item_name    String
+  mandate      String
+
+  checklist Checklist @relation(fields: [checklist_id], references: [checklist_id])
+  verifications Verification[]
+}
+
+model CourseFileDocument {
+  document_id     Int @id @default(autoincrement())
+  course_file_id  Int
+  checklist_id    Int
+  uploaded_by     Int
+  file_path       String
+  uploaded_at     DateTime @default(now())
+
+  courseFile CourseFile @relation(fields: [course_file_id], references: [course_file_id])
+  checklist  Checklist  @relation(fields: [checklist_id], references: [checklist_id])
+  audits     CourseFileAudit[]
+}
+
+model CourseFileAudit {
+  audit_id    Int @id @default(autoincrement())
+  document_id Int
+  verified_by Int
+  status      String
+  remarks     String?
+  verified_at DateTime?
+
+  document CourseFileDocument @relation(fields: [document_id], references: [document_id])
 }
 
 model Verification {
-  verification_id         String   @id @default(cuid())
-  identifier String
-  value      String
-  file_id    String?
-  item_id    String?
-  verified_by String?
-  status     String   @default("pending")
-  verifiedAt  DateTime?
+  verification_id Int @id @default(autoincrement())
+  co_file_id      Int
+  item_id         Int
+  verified_by     Int
+  status          String
+  verified_at     DateTime?
 
-  @@map("verification")
+  item ChecklistItem @relation(fields: [item_id], references: [item_id])
 }
-model TwoFactor {
-  id          String   @id @default(cuid())
-  userId      String
-  secret      String
-  backupCodes String
 
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+model Remark {
+  remark_id       Int @id @default(autoincrement())
+  verification_id Int
+  remark_text     String
+  added_by        Int
+  added_at        DateTime @default(now())
+}
 
-  @@map("twoFactor")
-}
-model user_roles{
-  userroleid        String   @id @default(cuid())
-  user_id        String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+model Student {
+  student_id Int @id @default(autoincrement())
+  name       String
+  reg_num    String
+  batch      String
+  department String
 
-  @@map("user_roles")
+  activities StudentActivity[]
+  documents  StudentDocument[]
+  internships Internship[]
 }
-model roles{
-  role_id        String   @id @default(cuid())
-  role_name      String
-}
-model semesters{
-  semester_id        String   @id @default(cuid())
-  semester_no      String
-  year_id      String 
-}
-model academic_years{
-  year_id        String   @id @default(cuid())
-  year      String
-}
-model courses{
-  course_id        String   @id @default(cuid())
-  course_name      String
-  course_code      String
-  credit_hours    Int
-  semester_id     String
-  regulations    String
-}
-model remarks{
-  remark_id        String   @id @default(cuid())
-  remark_text      String
-  verification_id   String
-  added_by       String
-  added_at      DateTime @default(now())
-}
-model course_assignments{
-  assignment_id        String   @id @default(cuid())
-  course_id      String
-  role   String
-  faculty_id    String
-}
-model faculty{
-  faculty_id        String   @id @default(cuid())
-  faculty_name      String
-  faculty_courses   String
-  faculty_reports   String
-  last_updated      DateTime @default(now())
-}
-model course_file{
-  file_id        String   @id @default(cuid())
-  course_id      String
-  faculty_id    String
-  status       String
-  uploaded_at    DateTime @default(now())
-}
-model co_document{
-  document_id        String   @id @default(cuid())
-  course_id      String
-  co_details     String
-  file_id       String
-  type         String
-  uploadeed_at    DateTime @default(now())
-}
-model po_document{
-  document_id        String   @id @default(cuid())
-  course_id      String
-  po_details     String
-  file_id       String
-  type         String
-  uploadeed_at    DateTime @default(now())
-}
-model checklist{
-  checklist_id        String   @id @default(cuid())
-  course_id      String
-  checklist_name   String
-  status       String
-  applicable_to   String
-  updated_at    DateTime @default(now())
-}
-model checklist_item{
-  item_id        String   @id @default(cuid())
-  checklist_id   String
-  item_name      String
-  status       String
-  updated_at    DateTime @default(now())
-}
-model internships{
-  internship_id        String   @id @default(cuid())
-  student_id      String
-  company_name    String
-  position       String
-  start_date     DateTime
-  end_date       DateTime
-  status         String
-}
-model student{
-  student_id        String   @id @default(cuid())
-  student_name      String
-  department       String
-  year_of_study    Int
-  reg_number      String
-}
-model student_document{
-  document_id        String   @id @default(cuid())
-  student_id      String
-  document_type   String
-  uploaded_at    DateTime @default(now())
-}
-model student_activities{
-  activity_id        String   @id @default(cuid())
-  student_id      String
-  event_id        String
-  activity_name   String
+
+model StudentActivity {
+  activity_id     Int @id @default(autoincrement())
+  student_id      Int
+  event_id        Int
   activity_points Int
-  description    String
-  date          DateTime
+  role            String
+
+  student Student @relation(fields: [student_id], references: [student_id])
 }
-model community{
-  community_id        String   @id @default(cuid())
-  community_name      String
+
+model StudentDocument {
+  doc_id      Int @id @default(autoincrement())
+  student_id  Int
+  doc_type    String
+  uploaded_at DateTime @default(now())
+
+  student Student @relation(fields: [student_id], references: [student_id])
+}
+
+model Internship {
+  internship_id Int @id @default(autoincrement())
+  student_id    Int
+  company       String
+  duration      String
+
+  student Student @relation(fields: [student_id], references: [student_id])
+}
+
+model Community {
+  event_id    Int @id @default(autoincrement())
+  event_name  String
+  organization String
+  mentor_id   Int
+  date        DateTime
+}
+
+model Notification {
+  notification_id Int @id @default(autoincrement())
+  user_id         Int
+  message         String
+  is_read         Boolean @default(false)
   created_at      DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [user_id])
 }
-model event{
-  event_id        String   @id @default(cuid())
-  event_name      String
-  event_date     DateTime
-  location      String
-  description   String
+
+model AuditLog {
+  log_id  Int @id @default(autoincrement())
+  user_id Int
+  action  String
+
+  user User @relation(fields: [user_id], references: [user_id])
 }
-model audit_logs{
-  log_id        String   @id @default(cuid())
-  user_id      String
-  action       String
-  timestamp    DateTime @default(now())
-}
-model ext_access{
-  access_id        String   @id @default(cuid())
-  user_id      String
-  resource     String
+
+model ExtAccess {
+  access_id    Int @id @default(autoincrement())
+  auditor_id   Int
   access_level String
-  granted_at   DateTime @default(now())
-}
-model notifications{
-  notification_id        String   @id @default(cuid())
-  user_id          String
-  message        String
-  is_read        Boolean   @default(false)
-  sent_at        DateTime  @default(now())
-}
-model feedback{
-  feedback_id        String   @id @default(cuid())
-  user_id        String
-  content       String
-  created_at    DateTime @default(now())
-}
-model reports{
-  report_id        String   @id @default(cuid())
-  title         String
-  content       String
-  created_by    String
-  created_at    DateTime @default(now())
 }
